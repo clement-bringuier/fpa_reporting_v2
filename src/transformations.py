@@ -156,9 +156,12 @@ def split_staff_costs(
 
 def apply_ifrs16(mapped: pd.DataFrame) -> pd.DataFrame:
     df = mapped.copy()
-    loyers = df[df["mapping_pl_detail"] == "i2"]["montant_net"].sum()
+    loyers = df[df["mapping_pl_detail"] == "i2_ifrs16"]["montant_net"].sum()
     if loyers == 0:
         return df
+    # Requalifie i2_ifrs16 en i2 (reste dans Rents & other charges)
+    df.loc[df["mapping_pl_detail"] == "i2_ifrs16", "mapping_pl_detail"] = "i2"
+    # Ajoute activation i3 et dotation m4
     ifrs16 = pd.DataFrame([
         {"numero_compte": "ifrs16", "mapping_pl_detail": "i3", "montant_net": -loyers},
         {"numero_compte": "ifrs16", "mapping_pl_detail": "m4", "montant_net":  loyers},
