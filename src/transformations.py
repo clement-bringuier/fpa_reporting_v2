@@ -163,7 +163,7 @@ def apply_ifrs16(mapped: pd.DataFrame) -> pd.DataFrame:
     df.loc[df["mapping_pl_detail"] == "i2_ifrs16", "mapping_pl_detail"] = "i2"
     # Ajoute activation i3 et dotation m4
     ifrs16 = pd.DataFrame([
-        {"numero_compte": "ifrs16", "mapping_pl_detail": "i3", "montant_net": -loyers},
+        {"numero_compte": "ifrs16", "mapping_pl_detail": "i3", "montant_net":  loyers},
         {"numero_compte": "ifrs16", "mapping_pl_detail": "m4", "montant_net":  loyers},
     ])
     return pd.concat([df, ifrs16], ignore_index=True)
