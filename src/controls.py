@@ -110,7 +110,11 @@ def check_mapping(mapping: pd.DataFrame, fec: pd.DataFrame, entity: str, period:
 
     # Codes mapping invalides
     invalids = mapping[~mapping["mapping_pl_detail"].isin(VALID_PL_CODES)]
-    invalids = invalids[~invalids["mapping_pl_detail"].isin(["nan", ""])]
+    invalids = mapping[~mapping["mapping_pl_detail"].apply(
+    lambda x: str(x).strip().lower() in {
+        "nan", "", "na", "none", *[v.lower() for v in VALID_PL_CODES]
+    }
+)]
     if not invalids.empty:
         rows.append(_warn(f"Mapping {entity} — codes inconnus", invalids["mapping_pl_detail"].unique().tolist()))
 

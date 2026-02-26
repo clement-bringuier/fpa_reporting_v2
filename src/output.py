@@ -1,5 +1,4 @@
-﻿
-import pandas as pd
+﻿import pandas as pd
 from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 import os
 
@@ -29,20 +28,16 @@ BORDER_KEY = Border(top=_medium, bottom=_medium)
 
 
 # ─────────────────────────────────────────────
-# ÉCRITURE D'UN ONGLET
+# ÉCRITURE D'UN ONGLET P&L
 # ─────────────────────────────────────────────
 
 def write_pl_sheet(ws, pl_df: pd.DataFrame, title: str, period_label: str, structure: list):
-    """Écrit un P&L formaté dans un onglet Excel."""
-
-    # Déduplique label → type
     seen, label_type = set(), {}
     for _, label, t in structure:
         if label not in seen:
             label_type[label] = t
             seen.add(label)
 
-    # ── En-têtes ──
     ws["A1"] = title
     ws["A1"].font = Font(bold=True, size=13, color="1A6B9A")
     ws["A2"] = period_label
@@ -58,7 +53,6 @@ def write_pl_sheet(ws, pl_df: pd.DataFrame, title: str, period_label: str, struc
     ws.column_dimensions["A"].width = 45
     ws.column_dimensions["B"].width = 18
 
-    # ── Lignes P&L ──
     row, alt = 5, 0
     for label in pl_df.index:
         row_type = label_type.get(label, "detail")
@@ -90,22 +84,56 @@ def write_pl_sheet(ws, pl_df: pd.DataFrame, title: str, period_label: str, struc
 
 
 # ─────────────────────────────────────────────
+# ÉCRITURE DE L'ONGLET CONTRÔLES
+# ─────────────────────────────────────────────
+
+def write_controls_sheet(ws, controls_df: pd.DataFrame, period_label: str):
+    STATUS_STYLE = {
+        "✅ OK":         {"fill": _fill("DFF0D8"), "font": _font("2D6A2D")},
+        "⚠️  ATTENTION": {"fill": _fill("FFF3CD"), "font": _font("856404")},
+        "❌ ERREUR":     {"fill": _fill("F8D7DA"), "font": _font("721C24")},
+    }
+
+    ws["A1"] = "Contrôles qualité"
+    ws["A1"].font = Font(bold=True, size=13, color="1A6B9A")
+    ws["A2"] = period_label
+    ws["A2"].font = Font(italic=True, size=10, color="636E72")
+
+    headers    = ["Statut", "Détail", "Valeur"]
+    col_widths = [22, 65, 60]
+    for col_idx, (h, w) in enumerate(zip(headers, col_widths), start=1):
+        cell = ws.cell(row=4, column=col_idx, value=h)
+        cell.fill      = _fill("2F3640")
+        cell.font      = _font("FFFFFF", bold=True)
+        cell.alignment = Alignment(horizontal="center")
+        ws.column_dimensions[cell.column_letter].width = w
+
+    for row_idx, record in enumerate(controls_df.to_dict("records"), start=5):
+        statut = record["statut"]
+        style  = STATUS_STYLE.get(statut, STATUS_STYLE["⚠️  ATTENTION"])
+
+        for col_idx, key in enumerate(["statut", "detail", "valeur"], start=1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=str(record[key]))
+            cell.fill      = style["fill"]
+            cell.font      = style["font"]
+            cell.alignment = Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+        ws.row_dimensions[row_idx].height = 18
+
+    ws.freeze_panes = "A5"
+
+
+# ─────────────────────────────────────────────
 # EXPORT EXCEL
 # ─────────────────────────────────────────────
 
-def export_to_excel(pl_dict: dict, period: str, pl_structures: dict, output_dir: str = "output") -> str:
-    """
-    Exporte les P&L dans un fichier Excel multi-onglets.
-    
-    Args:
-        pl_dict      : {sheet_name: DataFrame(index=labels, col=Montant)}
-        period       : YYYYMM
-        pl_structures: {sheet_name: [(code, label, type)]}
-        output_dir   : dossier de sortie
-    
-    Returns:
-        Chemin du fichier généré
-    """
+def export_to_excel(
+    pl_dict: dict,
+    period: str,
+    pl_structures: dict,
+    controls_df: pd.DataFrame,
+    output_dir: str = "output"
+) -> str:
     os.makedirs(output_dir, exist_ok=True)
 
     p            = pd.to_datetime(period, format="%Y%m")
@@ -113,17 +141,21 @@ def export_to_excel(pl_dict: dict, period: str, pl_structures: dict, output_dir:
     filename     = os.path.join(output_dir, f"PL_{period}.xlsx")
 
     with pd.ExcelWriter(filename, engine="openpyxl") as writer:
+
         for sheet_name, pl_df in pl_dict.items():
-            # Crée l'onglet vide
             pl_df.to_excel(writer, sheet_name=sheet_name, index=True)
             ws = writer.sheets[sheet_name]
-
-            # Efface ce que pandas a écrit
             for r in ws.iter_rows():
                 for cell in r:
                     cell.value = None
-
             write_pl_sheet(ws, pl_df, sheet_name, period_label, pl_structures[sheet_name])
+
+        controls_df.to_excel(writer, sheet_name="Contrôles", index=False)
+        ws_ctrl = writer.sheets["Contrôles"]
+        for r in ws_ctrl.iter_rows():
+            for cell in r:
+                cell.value = None
+        write_controls_sheet(ws_ctrl, controls_df, period_label)
 
     print(f"  ✅ Fichier généré : {filename}")
     return filename

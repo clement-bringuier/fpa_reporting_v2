@@ -1,5 +1,4 @@
-﻿
-import sys
+﻿import sys
 import pandas as pd
 
 from src.loaders import (
@@ -16,6 +15,7 @@ from src.transformations import (
 )
 from src.pl_builder import build_full_pl
 from src.output import export_to_excel
+from src.controls import run_all_controls
 
 
 # ─────────────────────────────────────────────
@@ -41,16 +41,16 @@ ENTITY_TO_RH_GROUP = {
 
 def run(period: str):
     print(f"\n{'='*52}")
-    print(f"  GÉNÉRATION P&L — {period}")
+    print(f"  GENERATION P&L — {period}")
     print(f"{'='*52}\n")
 
     # ── 1. Chargement ────────────────────────────────
     print("📂 Chargement des fichiers...\n")
-    fecs         = load_all_fec(period)
-    mappings     = load_all_mappings()
+    fecs          = load_all_fec(period)
+    mappings      = load_all_mappings()
     pl_structures = load_all_pl_structures()
-    split_ca     = load_split_ca_cogs(period)
-    split_rh     = load_split_rh(period)
+    split_ca      = load_split_ca_cogs(period)
+    split_rh      = load_split_rh(period)
 
     if not fecs:
         print("\n❌ Aucun FEC chargé. Vérifiez data/fec/")
@@ -79,7 +79,7 @@ def run(period: str):
             print(f"  ⚠️  Mapping manquant pour {entity}, ignoré.")
             continue
 
-        print(f"  → {entity}")
+        print(f"  -> {entity}")
         group = ENTITY_TO_RH_GROUP[entity]
 
         transformed[entity] = transform_entity(
@@ -96,9 +96,16 @@ def run(period: str):
     print("\n📊 Construction des P&L...\n")
     pl_dict = build_full_pl(transformed, pl_structures)
 
-    # ── 5. Export Excel ──────────────────────────────
+    # ── 5. Contrôles qualité ─────────────────────────
+    print("\n🔍 Contrôles qualité...\n")
+    controls_df = run_all_controls(fecs, mappings, split_rh, split_ca, pl_dict, period)
+    errors   = (controls_df["statut"] == "❌ ERREUR").sum()
+    warnings = (controls_df["statut"] == "⚠️  ATTENTION").sum()
+    print(f"  {errors} erreur(s), {warnings} avertissement(s)")
+
+    # ── 6. Export Excel ──────────────────────────────
     print("\n💾 Export Excel...\n")
-    filepath = export_to_excel(pl_dict, period, pl_structures)
+    filepath = export_to_excel(pl_dict, period, pl_structures, controls_df)
 
     print(f"\n{'='*52}")
     print(f"  ✅ Terminé ! → {filepath}")
